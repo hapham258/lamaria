@@ -1,3 +1,18 @@
+Setup:
+```
+conda create -n lamaria_all python=3.11
+conda activate lamaria_all
+python -m pip install -r requirements.txt
+python -m pip install -e .
+conda install -c conda-forge vrs
+```
+Prepare data:
+```
+export LAMARIA_PATH=/home/hapq/Documents/SLAM_Datasets/lamaria
+python -m tools.download_lamaria --output_dir $LAMARIA_PATH --sequences R_01_easy --type raw
+aria_rerun_viewer --vrs $LAMARIA_PATH/training/R_01_easy/raw_data/R_01_easy.vrs
+```
+
 <p align="center">
   <h1 align="center"><ins>The LaMAria Dataset</ins> <br>Benchmarking Egocentric Visual-Inertial SLAM at City Scale</h1>
   <h4 align="center">

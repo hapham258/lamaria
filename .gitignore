@@ -3,3 +3,5 @@
 lamaria_data/
 demo/
 demo_outputs/
+lamaria.egg-info/
+.vscode
