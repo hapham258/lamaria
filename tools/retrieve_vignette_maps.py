@@ -47,3 +47,7 @@ if __name__ == "__main__":
     cv2.imwrite(args.output, mask_vis)
     print(f"Saved: {args.output}")
     print(f"shape={mask.shape} " f"min={mask.min()} " f"max={mask.max()}")
+    binary_mask = (valid.astype(np.uint8)) * 255
+    inv_valid = (~valid).astype(np.uint8) * 255
+    cv2.imwrite("invalid_mask.png", inv_valid)
+    print("Saved: invalid_mask.png")
