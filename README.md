@@ -8,9 +8,10 @@ conda install -c conda-forge vrs
 ```
 Prepare data:
 ```
-export LAMARIA_PATH=/home/hapq/Documents/SLAM_Datasets/lamaria
+export LAMARIA_PATH=$HOME/Documents/SLAM_Datasets/lamaria
 python -m tools.download_lamaria --output_dir $LAMARIA_PATH --sequences R_01_easy --type raw
 aria_rerun_viewer --vrs $LAMARIA_PATH/training/R_01_easy/raw_data/R_01_easy.vrs
+python -m tools.vrs_to_asl_folder --vrs_file $LAMARIA_PATH/training/R_01_easy/raw_data/R_01_easy.vrs --output_asl_folder $LAMARIA_PATH/training/R_01_easy/asl_folder
 ```
 
 <p align="center">

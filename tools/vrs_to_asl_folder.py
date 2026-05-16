@@ -1,6 +1,7 @@
 import argparse
 import csv
 import os
+import shutil
 from pathlib import Path
 
 from projectaria_tools.core import data_provider
@@ -129,6 +130,7 @@ def write_image_csv(image_timestamps, cam_folder):
 
     with open(data_csv, "w", newline="") as f:
         writer = csv.writer(f)
+        writer.writerow(["#timestamp [ns]", "filename"])
         for timestamp, image in zip(image_timestamps, images):
             row = [timestamp, image]
             writer.writerow(row)
@@ -180,13 +182,31 @@ def write_imu_data_to_csv(vrs_provider, csv_file):
                 writer.writerow(row)
 
 
+def write_exposure_csv(
+    vrs_file: Path,
+    stream_label: str,
+    csv_path: Path,
+):
+    provider = data_provider.create_vrs_data_provider(vrs_file.as_posix())
+    stream_id = provider.get_stream_id_from_label(stream_label)
+    num_frames = provider.get_num_data(stream_id)
+    with open(csv_path, "w") as f:
+        f.write("#timestamp [ns],exposure time[ns]\n")
+        for i in range(num_frames):
+            _, metadata = provider.get_image_data_by_index(stream_id, i)
+            timestamp_ns = metadata.capture_timestamp_ns
+            exposure_ns = int(metadata.exposure_duration * 1e9)
+            f.write(f"{timestamp_ns},{exposure_ns}\n")
+
+
 def form_aria_asl_folder(
     vrs_file: Path, output_asl_folder: Path, has_slam_drops=False
 ):
     if output_asl_folder.exists():
-        raise ValueError(f"{output_asl_folder=} already exists.")
+        print(f"{output_asl_folder=} already exists. Skipping.")
+        return
 
-    aria_folder = output_asl_folder / "aria"
+    aria_folder = output_asl_folder / "mav0"
     aria_folder.mkdir(parents=True, exist_ok=True)
 
     dataset_name = vrs_file.stem
@@ -242,7 +262,7 @@ def form_aria_asl_folder(
         image_timestamps,
     )
 
-    imu_folder = output_asl_folder / "aria" / "imu0"
+    imu_folder = output_asl_folder / "mav0" / "imu0"
     imu_folder.mkdir(parents=True, exist_ok=True)
     imu_csv = imu_folder / "data.csv"
 
@@ -257,6 +277,111 @@ def form_aria_asl_folder(
     )
     write_image_csv(image_timestamps, aria_folder / "cam0")
     write_image_csv(image_timestamps, aria_folder / "cam1")
+
+    write_exposure_csv(vrs_file, "camera-slam-left", aria_folder / "cam0" / "exposure.csv")
+    write_exposure_csv(vrs_file, "camera-slam-right", aria_folder / "cam1" / "exposure.csv")
+
+
+def convert_imu_csv_to_dso(asl_folder: Path):
+    imu_csv = asl_folder / "mav0" / "imu0" / "data.csv"
+    dso_dir = asl_folder / "dso"
+    dso_dir.mkdir(exist_ok=True)
+    imu_txt = dso_dir / "imu_orig.txt"
+    with open(imu_csv, "r") as f_in, open(imu_txt, "w") as f_out:
+        for line in f_in:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split(",")
+            timestamp = parts[0]
+            gyro = parts[1:4]
+            accel = parts[4:7]
+            out_line = " ".join([timestamp] + gyro + accel)
+            f_out.write(out_line + "\n")
+    print(f"Saved: {imu_txt}")
+
+
+def make_dso_times(asl_folder: Path, cam_name="cam0"):
+    data_path = asl_folder / "mav0" / cam_name / "data.csv"
+    exposure_path = asl_folder / "mav0" / cam_name / "exposure.csv"
+    dso_cam_dir = asl_folder / "dso" / cam_name
+    dso_cam_dir.mkdir(parents=True, exist_ok=True)
+    times_txt = dso_cam_dir / "times.txt"
+
+    with open(data_path, "r") as f_csv:
+        data_lines = [
+            line.strip()
+            for line in f_csv
+            if line.strip() and not line.startswith("#")
+        ]
+    with open(exposure_path, "r") as f_exp:
+        exposure_lines = [
+            line.strip()
+            for line in f_exp
+            if line.strip() and not line.startswith("#")
+        ]
+    assert len(data_lines) == len(exposure_lines)
+
+    with open(times_txt, "w") as f_out:
+        f_out.write("# filename timestamp[s] exposure[ms]\n")
+        for data_line, exp_line in zip(data_lines, exposure_lines):
+            timestamp_ns, filename = data_line.split(",")
+            _, exposure_ns = exp_line.split(",")
+            stem = Path(filename).stem
+            timestamp_s = int(timestamp_ns) / 1e9
+            exposure_ms = int(exposure_ns) / 1e6
+            f_out.write(
+                f"{stem} "
+                f"{timestamp_s:.9f} "
+                f"{exposure_ms:.6f}\n"
+            )
+    print(f"Saved: {times_txt}")
+
+
+def create_dso_structure(asl_folder: Path):
+    """
+    Create a TUM-VI/DSO-style folder structure with symlinks.
+    """
+
+    mav0_dir = asl_folder / "mav0"    
+    cam0_src = mav0_dir / "cam0" / "data"
+    cam1_src = mav0_dir / "cam1" / "data"
+    if not cam0_src.exists():
+        raise FileNotFoundError(f"Missing: {cam0_src}")
+    if not cam1_src.exists():
+        raise FileNotFoundError(f"Missing: {cam1_src}")
+
+    # Create directories
+    dso_dir = asl_folder / "dso"
+    (dso_dir / "cam0").mkdir(parents=True, exist_ok=True)
+    (dso_dir / "cam1").mkdir(parents=True, exist_ok=True)
+
+    # Symlink targets (relative paths like TUM-VI)
+    cam0_link = dso_dir / "cam0" / "images"
+    cam1_link = dso_dir / "cam1" / "images"
+    cam0_target = Path("../../mav0/cam0/data")
+    cam1_target = Path("../../mav0/cam1/data")
+
+    # Remove existing links/files if needed
+    for link_path in [cam0_link, cam1_link]:
+        if link_path.exists() or link_path.is_symlink():
+            if link_path.is_dir() and not link_path.is_symlink():
+                shutil.rmtree(link_path)
+            else:
+                link_path.unlink()
+
+    # Create symlinks
+    os.symlink(cam0_target, cam0_link)
+    os.symlink(cam1_target, cam1_link)
+    print(f"Created: {cam0_link} -> {cam0_target}")
+    print(f"Created: {cam1_link} -> {cam1_target}")
+    
+    # Convert IMU data
+    convert_imu_csv_to_dso(asl_folder)
+
+    # Convert to times.txt files
+    make_dso_times(args.output_asl_folder, "cam0")
+    make_dso_times(args.output_asl_folder, "cam1")
 
 
 if __name__ == "__main__":
@@ -287,3 +412,5 @@ if __name__ == "__main__":
         args.output_asl_folder,
         has_slam_drops=args.has_slam_drops,
     )
+
+    create_dso_structure(args.output_asl_folder)
