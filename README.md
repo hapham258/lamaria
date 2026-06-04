@@ -17,8 +17,9 @@ python -m tools.vrs_to_asl_folder --vrs_file $LAMARIA_PATH/training/R_01_easy/ra
 ```
 Evaluate:
 ```
-python convert_dso_results.py --src_root $HOME/se_slam/src/dso/build/results --dst_root demo/dso/results
-python convert_openvins_results.py --src_root $HOME/se_slam/ros2_ws/results --dst_root demo/openvins/results
+export OUTPUTS_PATH=$HOME/Desktop/lamaria_stuff
+python convert_dso_results.py --src_root $OUTPUTS_PATH/Runs/dso/results --dst_root demo/dso/results
+python convert_openvins_results.py --src_root $OUTPUTS_PATH/Runs/openvins/results --dst_root demo/openvins/results
 python run_all_eval.py --results_root demo/dso/results
 python run_all_eval.py --results_root demo/openvins/results
 ```
