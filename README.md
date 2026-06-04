@@ -15,6 +15,13 @@ aria_rerun_viewer --vrs $LAMARIA_PATH/training/R_01_easy/raw_data/R_01_easy.vrs
 export SLAM_DATASETS_PATH=$HOME/Documents/SLAM_Datasets
 python -m tools.vrs_to_asl_folder --vrs_file $LAMARIA_PATH/training/R_01_easy/raw_data/R_01_easy.vrs --output_asl_folder $SLAM_DATASETS_PATH/lamaria/training/R_01_easy/asl_folder
 ```
+Evaluate:
+```
+python convert_dso_results.py --src_root $HOME/se_slam/src/dso/build/results --dst_root demo/dso/results
+python convert_openvins_results.py --src_root $HOME/se_slam/ros2_ws/results --dst_root demo/openvins/results
+python run_all_eval.py --results_root demo/dso/results
+python run_all_eval.py --results_root demo/openvins/results
+```
 
 <p align="center">
   <h1 align="center"><ins>The LaMAria Dataset</ins> <br>Benchmarking Egocentric Visual-Inertial SLAM at City Scale</h1>
